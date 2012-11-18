@@ -27,32 +27,45 @@ def group(node, sprite):
   sym = gensym()
   line("var %s = new Kinetic.Group()" % sym)
   for child in children(node, "Path"):
-    path(child, sprite)
+    child_sym = path(child, sprite)
+    line("%s.add(%s)" % (sym, child_sym))
   for child in children(node, "Group"):
     child_sym = group(child, sprite)
     line("%s.add(%s)" % (sym, child_sym))
   return sym
 
 def path(node, sprite):
+  sym = gensym()
   data = attr(node, "data", "")
-  line("var path = new Kinetic.Path()")
-  line("path.setData('%s')" % data)
+  line("var %s = new Kinetic.Path({x:0,y:0})" % sym)
+  line("%s.setData('%s')" % (sym, data))
   for child in children(node, "fill"):
-    fill(child, sprite)
+    fill(child, sym)
+  return sym
 
-def fill(node, sprite):
+def fill(node, path_sym):
   for child in children(node, "SolidColor"):
     color = attr(child, "color", None)
     alpha = attr(child, "alpha", None)
     if color:
-      line("path.setFill('%s')" % color)
+      line("%s.setFill('%s')" % (path_sym, color))
     if alpha:
-      line("path.setOpacity(%s)" % float(alpha))
+      line("%s.setOpacity(%s)" % (path_sym, float(alpha)))
 
 def graphic(node, sprite):
-  for child in children(node, "Group"):
-    group(child, sprite)
+  group_sym = group(node, sprite)
+  line("%s.add(%s)" % ("layer", group_sym))
+
+
+
+
+print "window.onload = function() {"
+print "var stage = new Kinetic.Stage({container: 'container',width: 600,height: 500});"
+print "var layer = new Kinetic.Layer();"
 
 #print couple.parseString("23.3 4")
 dom = xml.dom.minidom.parse("Bamboo.fxg")
 graphic(dom.childNodes[0], None)
+
+print "stage.add(layer);"
+print "};"
