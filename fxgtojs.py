@@ -92,10 +92,10 @@ def fill(node, path_sym):
     cx = x + scaleX / 2
     cy = y
     rotation_rads = math.radians(float(attr(child, "rotation", 0)))
-    x1 = -scaleX/2 * math.cos(rotation_rads + math.pi) + cx
-    y1 = -scaleX/2 * math.sin(rotation_rads + math.pi) + cy
-    x2 = scaleX/2 * math.cos(math.pi) + cx
-    y2 = scaleX/2 * math.sin(math.pi) + cy
+    x1 = scaleX/2 * math.cos(rotation_rads + math.pi) + cx
+    y1 = scaleX/2 * math.sin(rotation_rads + math.pi) + cy
+    x2 = scaleX/2 * math.cos(rotation_rads) + cx
+    y2 = scaleX/2 * math.sin(rotation_rads) + cy
     color_stops = []
     for entry in children(child, "GradientEntry"):
       ratio = float(attr(entry, "ratio", 0))
@@ -119,6 +119,7 @@ def stroke(node, path_sym):
     line("%s.setStrokeWidth('%s')" % (path_sym, attr(child, "weight", 1.0)))
     if attr(child, "alpha"):
       line("%s.setOpacity('%s')" % (path_sym, attr(child, "alpha", 1.0)))
+    line("%s.setLineJoin('round')" % path_sym)
 
 def graphic(node, sprite):
   group_sym = group(node, sprite)
@@ -127,7 +128,7 @@ def graphic(node, sprite):
 print "window.onload = function() {"
 print "var stage = new Kinetic.Stage({container: 'container',width: 600,height: 500});"
 print "var layer = new Kinetic.Layer();"
-print "layer.setScale(1,1);"
+print "layer.setScale(3,3);"
 
 #print couple.parseString("23.3 4")
 dom = xml.dom.minidom.parse(sys.argv[1])
