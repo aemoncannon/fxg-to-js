@@ -43,9 +43,10 @@ def group(node, sprite):
 
 def path(node, sprite):
   sym = gensym()
-  line("var %s = new Kinetic.Path({x:0,y:0,lineCap:'round'})" % sym)
+  line("var %s = new Kinetic.Path({x:0,y:0})" % sym)
   for data in attributes(node, "data"):
     cleaned = re.compile("[\r\n\t]").sub("", data)
+    cleaned = re.compile("  ").sub(" ", cleaned)
     line("%s.setData('%s')" % (sym, cleaned))
   for child in children(node, "fill"):
     fill(child, sym)
@@ -83,10 +84,29 @@ def fill(node, path_sym):
     line("%s.setFill('%s')" % (path_sym, attr(child, "color", "black")))
     line("%s.setOpacity(%s)" % (path_sym, attr(child, "alpha", 1.0)))
 
+  for child in children(node, "LinearGradient"):
+    color_stops = []
+    for entry in children(child, "GradientEntry"):
+      ratio = float(attr(entry, "ratio", 0))
+      color = str(attr(entry, "color", "#ffffff"))
+      color_stops.append(ratio)
+      color_stops.append(color)
+    line("%s.setFill({start:{x:-10,y:-10},end:{x:10,y:10},colorStops:%s})" % (path_sym, color_stops))
+
+  for child in children(node, "RadialGradient"):
+    color_stops = []
+    for entry in children(child, "GradientEntry"):
+      ratio = float(attr(entry, "ratio", 0))
+      color = str(attr(entry, "color", "#ffffff"))
+      color_stops.append(ratio)
+      color_stops.append(color)
+    line("%s.setFill({start:{x:-10,y:-10,radius:0},end:{x:10,y:10,radius:70},colorStops:%s})" % (path_sym, color_stops))
+
 def stroke(node, path_sym):
   for child in children(node, "SolidColorStroke"):
     line("%s.setStroke('%s')" % (path_sym, attr(child, "color", "black")))
     line("%s.setStrokeWidth('%s')" % (path_sym, attr(child, "weight", 1.0)))
+    line("%s.setLineJoin('round')" % (path_sym))
 
 def graphic(node, sprite):
   group_sym = group(node, sprite)
