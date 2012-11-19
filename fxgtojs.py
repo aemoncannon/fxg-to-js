@@ -1,4 +1,4 @@
-import sys
+import sys,os,math
 import xml.dom.minidom
 import xml.dom
 import itertools
@@ -85,13 +85,24 @@ def fill(node, path_sym):
     line("%s.setOpacity(%s)" % (path_sym, attr(child, "alpha", 1.0)))
 
   for child in children(node, "LinearGradient"):
+    x = float(attr(child, "x", 0))
+    y = float(attr(child, "y", 0))
+    # scaleX interpreted as width in fxg
+    scaleX = float(attr(child, "scaleX", 0))
+    cx = x + scaleX / 2
+    cy = y
+    rotation_rads = math.radians(float(attr(child, "rotation", 0)))
+    x1 = -scaleX/2 * math.cos(rotation_rads + math.pi) + cx
+    y1 = -scaleX/2 * math.sin(rotation_rads + math.pi) + cy
+    x2 = scaleX/2 * math.cos(math.pi) + cx
+    y2 = scaleX/2 * math.sin(math.pi) + cy
     color_stops = []
     for entry in children(child, "GradientEntry"):
       ratio = float(attr(entry, "ratio", 0))
-      color = str(attr(entry, "color", "#ffffff"))
+      color = str(attr(entry, "color", "black"))
       color_stops.append(ratio)
       color_stops.append(color)
-    line("%s.setFill({start:{x:-10,y:-10},end:{x:10,y:10},colorStops:%s})" % (path_sym, color_stops))
+    line("%s.setFill({start:{x:%s,y:%s},end:{x:%s,y:%s},colorStops:%s})" % (path_sym, x1, y1, x2, y2, color_stops))
 
   for child in children(node, "RadialGradient"):
     color_stops = []
@@ -106,7 +117,8 @@ def stroke(node, path_sym):
   for child in children(node, "SolidColorStroke"):
     line("%s.setStroke('%s')" % (path_sym, attr(child, "color", "black")))
     line("%s.setStrokeWidth('%s')" % (path_sym, attr(child, "weight", 1.0)))
-    line("%s.setLineJoin('round')" % (path_sym))
+    if attr(child, "alpha"):
+      line("%s.setOpacity('%s')" % (path_sym, attr(child, "alpha", 1.0)))
 
 def graphic(node, sprite):
   group_sym = group(node, sprite)
@@ -115,10 +127,10 @@ def graphic(node, sprite):
 print "window.onload = function() {"
 print "var stage = new Kinetic.Stage({container: 'container',width: 600,height: 500});"
 print "var layer = new Kinetic.Layer();"
-print "layer.setScale(5,5);"
+print "layer.setScale(1,1);"
 
 #print couple.parseString("23.3 4")
-dom = xml.dom.minidom.parse("AuroraFern.fxg")
+dom = xml.dom.minidom.parse(sys.argv[1])
 graphic(dom.childNodes[0], None)
 
 print "stage.add(layer);"
