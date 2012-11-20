@@ -19,53 +19,64 @@ def attributes(node, key):
     yield at.value
 
 def line(line):
+  sys.stdout.write(line + "\n")
+
+def statement(line):
   sys.stdout.write(line + ";\n")
 
 ident_counter = itertools.count()
 def gensym():
   return "sym" + str(next(ident_counter))
 
-class Sprite(object):
-  def __init__(self):
-    pass
+known_library_defs = set()
 
-def group(node, sprite):
+def symbol_instance(node):
+  symbol_type = node.localName
   sym = gensym()
-  line("var %s = new Kinetic.Group()" % sym)
-  for child in children(node, "Path"):
-    child_sym = path(child, sprite)
-    line("%s.add(%s)" % (sym, child_sym))
-  for child in children(node, "Group"):
-    child_sym = group(child, sprite)
-    line("%s.add(%s)" % (sym, child_sym))
+  statement("var %s = InstantiateSymbol_%s()" % (sym, symbol_type))
   common_transforms(node, sym)
   return sym
 
-def path(node, sprite):
+def group(node):
   sym = gensym()
-  line("var %s = new Kinetic.Path({x:0,y:0})" % sym)
+  statement("var %s = new Kinetic.Group()" % sym)
+  for child in node.childNodes:
+    if child.localName == "Path":
+      child_sym = path(child)
+      statement("%s.add(%s)" % (sym, child_sym))
+    elif child.localName == "Group":
+      child_sym = group(child)
+      statement("%s.add(%s)" % (sym, child_sym))
+    elif child.localName in known_library_defs:
+      child_sym = symbol_instance(child)
+      statement("%s.add(%s)" % (sym, child_sym))
+  common_transforms(node, sym)
+  return sym
+
+def path(node):
+  sym = gensym()
+  statement("var %s = new Kinetic.Path({x:0,y:0})" % sym)
   for data in attributes(node, "data"):
-    cleaned = re.compile("[\r\n\t]").sub("", data)
-    cleaned = re.compile("  ").sub(" ", cleaned)
-    line("%s.setData('%s')" % (sym, cleaned))
+    cleaned = re.compile("[ \r\n\t]+").sub(" ", data)
+    statement("%s.setData('%s')" % (sym, cleaned))
+  trans = common_transforms(node, sym)
   for child in children(node, "fill"):
     fill(child, sym)
   for child in children(node, "stroke"):
-    stroke(child, sym)
-  common_transforms(node, sym)
+    stroke(child, sym, trans)
   return sym
 
 def common_transforms(node, sym):
   for rotation in attributes(node, "rotation"):
-    line("%s.setRotationDeg(%s)" % (sym, rotation))
+    statement("%s.setRotationDeg(%s)" % (sym, rotation))
   for x in attributes(node, "x"):
-    line("%s.setX(%s)" % (sym, x))
+    statement("%s.setX(%s)" % (sym, x))
   for y in attributes(node, "y"):
-    line("%s.setY(%s)" % (sym, y))
-  sx = attr(node, "scaleX", 1)
-  sy = attr(node, "scaleY", 1)
+    statement("%s.setY(%s)" % (sym, y))
+  sx = float(attr(node, "scaleX", 1))
+  sy = float(attr(node, "scaleY", 1))
   if sx != 1 or sy != 1:
-    line("%s.setScale(%s, %s)" % (sym, sx, sy))
+    statement("%s.setScale(%s, %s)" % (sym, sx, sy))
   for child in children(node, "transform"):
     for child in children(child, "Transform"):
       for child in children(child, "matrix"):
@@ -76,13 +87,14 @@ def common_transforms(node, sym):
           d = attr(mat, "d", 1)
           tx = attr(mat, "tx", 0)
           ty = attr(mat, "ty", 0)
-          line("%s.setOffset(%s, %s)" % (sym, tx, ty))
-          #line("%s.getTransform().m = [%s, %s, %s, %s, %s, %s]" % (sym, a, b, c, d, tx, ty))
+          statement("%s.setOffset(%s, %s)" % (sym, tx, ty))
+          #statement("%s.getTransform().m = [%s, %s, %s, %s, %s, %s]" % (sym, a, b, c, d, tx, ty))
+  return {'sx':sx, 'sy':sy}
 
 def fill(node, path_sym):
   for child in children(node, "SolidColor"):
-    line("%s.setFill('%s')" % (path_sym, attr(child, "color", "black")))
-    line("%s.setOpacity(%s)" % (path_sym, attr(child, "alpha", 1.0)))
+    statement("%s.setFill('%s')" % (path_sym, attr(child, "color", "black")))
+    statement("%s.setOpacity(%s)" % (path_sym, attr(child, "alpha", 1.0)))
 
   for child in children(node, "LinearGradient"):
     x = float(attr(child, "x", 0))
@@ -102,7 +114,7 @@ def fill(node, path_sym):
       color = str(attr(entry, "color", "black"))
       color_stops.append(ratio)
       color_stops.append(color)
-    line("%s.setFill({start:{x:%s,y:%s},end:{x:%s,y:%s},colorStops:%s})" % (path_sym, x1, y1, x2, y2, color_stops))
+    statement("%s.setFill({start:{x:%s,y:%s},end:{x:%s,y:%s},colorStops:%s})" % (path_sym, x1, y1, x2, y2, color_stops))
 
   for child in children(node, "RadialGradient"):
     color_stops = []
@@ -111,19 +123,34 @@ def fill(node, path_sym):
       color = str(attr(entry, "color", "#ffffff"))
       color_stops.append(ratio)
       color_stops.append(color)
-    line("%s.setFill({start:{x:-10,y:-10,radius:0},end:{x:10,y:10,radius:70},colorStops:%s})" % (path_sym, color_stops))
+    statement("%s.setFill({start:{x:-10,y:-10,radius:0},end:{x:10,y:10,radius:70},colorStops:%s})" % (path_sym, color_stops))
 
-def stroke(node, path_sym):
+def stroke(node, path_sym, transform):
   for child in children(node, "SolidColorStroke"):
-    line("%s.setStroke('%s')" % (path_sym, attr(child, "color", "black")))
-    line("%s.setStrokeWidth('%s')" % (path_sym, attr(child, "weight", 1.0)))
+    statement("%s.setStroke('%s')" % (path_sym, attr(child, "color", "black")))
+    avg_scale = transform['sx']
+    weight = float(attr(child, "weight", 1.0)) / avg_scale
+    statement("%s.setStrokeWidth('%s')" % (path_sym, weight))
     if attr(child, "alpha"):
-      line("%s.setOpacity('%s')" % (path_sym, attr(child, "alpha", 1.0)))
-    line("%s.setLineJoin('round')" % path_sym)
+      statement("%s.setOpacity('%s')" % (path_sym, attr(child, "alpha", 1.0)))
+    statement("%s.setLineJoin('round')" % path_sym)
 
-def graphic(node, sprite):
-  group_sym = group(node, sprite)
-  line("%s.add(%s)" % ("layer", group_sym))
+def library_definition(node):
+  name = attr(node, "name")
+  assert name
+  known_library_defs.add(name)
+  line("function InstantiateSymbol_%s() {" % name)
+  for child in children(node, "Group"):
+    child_sym = group(child)
+    statement("return %s" % child_sym)
+  line("}")
+
+def graphic(node):
+  for child in children(node, "Library"):
+    for definition in children(child, "Definition"):
+      library_definition(definition)
+  group_sym = group(node)
+  statement("%s.add(%s)" % ("layer", group_sym))
 
 print "window.onload = function() {"
 print "var stage = new Kinetic.Stage({container: 'container',width: 600,height: 500});"
@@ -132,7 +159,7 @@ print "layer.setScale(3,3);"
 
 #print couple.parseString("23.3 4")
 dom = xml.dom.minidom.parse(sys.argv[1])
-graphic(dom.childNodes[0], None)
+graphic(dom.childNodes[0])
 
 print "stage.add(layer);"
 print "};"
